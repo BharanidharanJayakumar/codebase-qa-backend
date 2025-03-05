@@ -93,7 +93,27 @@ async def list_projects(
     if user:
         user_projects = db.list_user_projects(user.id)
         if user_projects:
-            return {"projects": user_projects}
+            # Normalize Supabase shape to match engine shape for frontend
+            normalized = []
+            for p in user_projects:
+                indexed_at = p.get("indexed_at", "")
+                # Convert ISO string to epoch if needed
+                if isinstance(indexed_at, str) and indexed_at:
+                    from datetime import datetime
+                    try:
+                        dt = datetime.fromisoformat(indexed_at.replace("Z", "+00:00"))
+                        indexed_at = dt.timestamp()
+                    except ValueError:
+                        indexed_at = 0
+                normalized.append({
+                    "project_id": p["id"],
+                    "slug": p["slug"],
+                    "project_root": p["project_root"],
+                    "github_url": p.get("github_url"),
+                    "total_files": p.get("total_files", 0),
+                    "indexed_at": indexed_at,
+                })
+            return {"projects": normalized, "total": len(normalized)}
     # Fallback: list from engine (for unauthenticated or users with no saved projects)
     return await call_agent(client, "qa_list_projects", {})
 
