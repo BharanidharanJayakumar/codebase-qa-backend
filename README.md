@@ -1,6 +1,6 @@
 # Codebase QA Backend
 
-Thin FastAPI proxy that connects the web frontend to the Codebase QA Agent engine.
+Thin FastAPI proxy that connects the web frontend to the Codebase QA Agent engine. Handles CORS, SSE streaming, and request routing.
 
 ## Quick Start
 
@@ -26,7 +26,30 @@ uvicorn app.main:app --reload --port 8000
 | GET | `/api/qa/projects` | List all indexed projects |
 | POST | `/api/qa/file-content` | Get file source code |
 
+## Architecture
+
+```
+Frontend (Next.js) → Backend (FastAPI) → Engine (Agentfield)
+     :3000              :8000               :8080
+```
+
+The backend is a zero-logic proxy. All indexing, retrieval, and LLM reasoning happens in the engine.
+
 ## Environment Variables
 
-- `AGENT_BASE_URL` — Agentfield agent URL (default: `http://localhost:8080`)
-- `CORS_ORIGINS` — Comma-separated allowed origins
+| Variable | Default | Description |
+|---|---|---|
+| `AGENT_BASE_URL` | `http://localhost:8080` | Agentfield agent URL |
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated allowed origins |
+
+## Docker
+
+```bash
+docker build -t codebase-qa-backend .
+docker run -p 8000:8000 -e AGENT_BASE_URL=http://host.docker.internal:8080 codebase-qa-backend
+```
+
+## Related Repos
+
+- [codebase-qa-agent](https://github.com/BharanidharanJayakumar/codebase-qa-agent) — RAG engine
+- [codebase-qa-frontend](https://github.com/BharanidharanJayakumar/codebase-qa-frontend) — Next.js web UI
