@@ -16,3 +16,7 @@ class FindRelevantFilesRequest(BaseModel):
 class GetFileContentRequest(BaseModel):
     file_path: str
     project_path: Optional[str] = None
+
+
+class ListProjectFilesRequest(BaseModel):
+    project_path: str

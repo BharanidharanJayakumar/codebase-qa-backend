@@ -10,6 +10,7 @@ from app.schemas.qa import (
     AnswerQuestionRequest,
     FindRelevantFilesRequest,
     GetFileContentRequest,
+    ListProjectFilesRequest,
 )
 
 router = APIRouter(tags=["qa"])
@@ -67,4 +68,24 @@ async def get_file_content(
 ):
     return await call_agent(
         client, "qa_get_file_content", body.model_dump(exclude_none=True)
+    )
+
+
+@router.post("/project-files")
+async def list_project_files(
+    body: ListProjectFilesRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    return await call_agent(
+        client, "qa_list_project_files", body.model_dump()
+    )
+
+
+@router.get("/sessions/{session_id}")
+async def get_session_history(
+    session_id: str,
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    return await call_agent(
+        client, "qa_get_session_history", {"session_id": session_id}
     )
