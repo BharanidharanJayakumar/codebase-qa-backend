@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -6,6 +7,7 @@ import httpx
 
 from app.dependencies import get_http_client
 from app.services.agent_client import call_agent
+from app.services.auth import AuthUser, get_optional_user
 from app.schemas.qa import (
     AnswerQuestionRequest,
     FindRelevantFilesRequest,
@@ -13,6 +15,7 @@ from app.schemas.qa import (
     ListProjectFilesRequest,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["qa"])
 
 
@@ -20,17 +23,17 @@ router = APIRouter(tags=["qa"])
 async def answer_question(
     body: AnswerQuestionRequest,
     client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
 ):
     """SSE endpoint — streams the answer as text/event-stream."""
+    if user:
+        logger.info("Q&A request from user %s", user.id)
 
     async def event_generator():
-        # Call the agent (blocking for now — agent doesn't stream yet)
         result = await call_agent(
             client, "qa_answer_question", body.model_dump(exclude_none=True)
         )
-        # Emit the answer as a delta event (for streaming UX)
         yield f"data: {json.dumps({'type': 'delta', 'text': result.get('answer', '')})}\n\n"
-        # Emit the full response as done event
         yield f"data: {json.dumps({'type': 'done', **result})}\n\n"
 
     return StreamingResponse(
@@ -48,6 +51,7 @@ async def answer_question(
 async def find_relevant_files(
     body: FindRelevantFilesRequest,
     client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
 ):
     return await call_agent(
         client, "qa_find_relevant_files", body.model_dump(exclude_none=True)
@@ -57,6 +61,7 @@ async def find_relevant_files(
 @router.get("/projects")
 async def list_projects(
     client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
 ):
     return await call_agent(client, "qa_list_projects", {})
 
@@ -65,6 +70,7 @@ async def list_projects(
 async def get_file_content(
     body: GetFileContentRequest,
     client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
 ):
     return await call_agent(
         client, "qa_get_file_content", body.model_dump(exclude_none=True)
@@ -75,6 +81,7 @@ async def get_file_content(
 async def list_project_files(
     body: ListProjectFilesRequest,
     client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
 ):
     return await call_agent(
         client, "qa_list_project_files", body.model_dump()
@@ -85,6 +92,7 @@ async def list_project_files(
 async def get_session_history(
     session_id: str,
     client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
 ):
     return await call_agent(
         client, "qa_get_session_history", {"session_id": session_id}
