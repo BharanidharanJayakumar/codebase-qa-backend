@@ -6,6 +6,7 @@ import httpx
 from app.dependencies import get_http_client
 from app.services.agent_client import call_agent
 from app.services.auth import AuthUser, get_optional_user
+from app.services import supabase_db as db
 from app.schemas.indexer import (
     IndexProjectRequest,
     CloneAndIndexRequest,
@@ -27,7 +28,21 @@ async def index_project(
 ):
     if user:
         logger.info("Index request from user %s", user.id)
-    return await call_agent(client, "indexer_index_project", body.model_dump())
+    result = await call_agent(client, "indexer_index_project", body.model_dump())
+
+    # Save project to Supabase for authenticated users
+    if user and result.get("status") == "ok":
+        project_id = result.get("project_id", "")
+        slug = result.get("slug", "")
+        db.save_user_project(
+            user_id=user.id,
+            project_id=project_id,
+            slug=slug,
+            project_root=body.project_path,
+            total_files=result.get("total_files", 0),
+        )
+
+    return result
 
 
 @router.post("/clone")
@@ -37,8 +52,24 @@ async def clone_and_index(
     user: AuthUser | None = Depends(get_optional_user),
 ):
     if user:
-        logger.info("Clone+index request from user %s for %s", user.id, body.github_url)
-    return await call_agent(client, "indexer_clone_and_index", body.model_dump())
+        logger.info("Clone+index from user %s for %s", user.id, body.github_url)
+    result = await call_agent(client, "indexer_clone_and_index", body.model_dump())
+
+    # Save project to Supabase for authenticated users
+    if user and result.get("status") == "ok":
+        project_id = result.get("project_id", "")
+        slug = result.get("slug", "")
+        project_root = result.get("project_root", "")
+        db.save_user_project(
+            user_id=user.id,
+            project_id=project_id,
+            slug=slug,
+            project_root=project_root,
+            github_url=body.github_url,
+            total_files=result.get("total_files", 0),
+        )
+
+    return result
 
 
 @router.post("/update")
@@ -74,4 +105,10 @@ async def delete_project(
     client: httpx.AsyncClient = Depends(get_http_client),
     user: AuthUser | None = Depends(get_optional_user),
 ):
-    return await call_agent(client, "indexer_delete_project", body.model_dump())
+    result = await call_agent(client, "indexer_delete_project", body.model_dump())
+
+    # Also remove from Supabase
+    if user:
+        db.delete_user_project(user.id, body.project_identifier)
+
+    return result
