@@ -1,7 +1,7 @@
 import json
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 import httpx
 
@@ -9,6 +9,7 @@ from app.dependencies import get_http_client
 from app.services.agent_client import call_agent
 from app.services.auth import AuthUser, get_optional_user
 from app.services import supabase_db as db
+from app.middleware.rate_limit import limiter, GUEST_QUESTION_LIMIT, AUTH_QUESTION_LIMIT
 from app.schemas.qa import (
     AnswerQuestionRequest,
     FindRelevantFilesRequest,
@@ -21,7 +22,9 @@ router = APIRouter(tags=["qa"])
 
 
 @router.post("/answer")
+@limiter.limit(AUTH_QUESTION_LIMIT)
 async def answer_question(
+    request: Request,
     body: AnswerQuestionRequest,
     client: httpx.AsyncClient = Depends(get_http_client),
     user: AuthUser | None = Depends(get_optional_user),
@@ -92,9 +95,9 @@ async def list_projects(
     Falls back to engine projects for unauthenticated users."""
     if user:
         user_projects = db.list_user_projects(user.id)
+        # Authenticated users only see their own projects (no engine fallback)
+        normalized = []
         if user_projects:
-            # Normalize Supabase shape to match engine shape for frontend
-            normalized = []
             for p in user_projects:
                 indexed_at = p.get("indexed_at", "")
                 # Convert ISO string to epoch if needed
@@ -113,8 +116,8 @@ async def list_projects(
                     "total_files": p.get("total_files", 0),
                     "indexed_at": indexed_at,
                 })
-            return {"projects": normalized, "total": len(normalized)}
-    # Fallback: list from engine (for unauthenticated or users with no saved projects)
+        return {"projects": normalized, "total": len(normalized)}
+    # Unauthenticated users: show engine projects (legacy/demo mode)
     return await call_agent(client, "qa_list_projects", {})
 
 
