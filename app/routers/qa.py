@@ -169,3 +169,21 @@ async def list_user_sessions(
         return {"sessions": []}
     sessions = db.list_project_sessions(user.id, project_id)
     return {"sessions": sessions}
+
+
+@router.get("/user/me")
+async def get_current_user_info(
+    user: AuthUser | None = Depends(get_optional_user),
+):
+    """Return current authenticated user info, or null."""
+    if not user:
+        return {"user": None}
+    project_count = len(db.list_user_projects(user.id))
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "is_anonymous": user.is_anonymous,
+            "project_count": project_count,
+        }
+    }
