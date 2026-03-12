@@ -15,6 +15,10 @@ from app.schemas.qa import (
     FindRelevantFilesRequest,
     GetFileContentRequest,
     ListProjectFilesRequest,
+    ProjectSummaryRequest,
+    ProjectCategoriesRequest,
+    ProjectImportsRequest,
+    SearchCodeRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -212,3 +216,51 @@ async def get_current_user_info(
             "project_count": project_count,
         }
     }
+
+
+@router.post("/project-summary")
+async def get_project_summary(
+    body: ProjectSummaryRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
+):
+    """Get project-level summary: languages, frameworks, dir tree, README, stats."""
+    return await call_agent(
+        client, "summary_get_project_overview", body.model_dump()
+    )
+
+
+@router.post("/project-categories")
+async def get_project_categories(
+    body: ProjectCategoriesRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
+):
+    """Get categorized symbols (DTOs, routes, tests, services, etc.)."""
+    return await call_agent(
+        client, "summary_query_categories", body.model_dump(exclude_none=True)
+    )
+
+
+@router.post("/project-imports")
+async def get_project_imports(
+    body: ProjectImportsRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
+):
+    """Get import graph data for visualization."""
+    return await call_agent(
+        client, "summary_query_imports", body.model_dump(exclude_none=True)
+    )
+
+
+@router.post("/search-code")
+async def search_code(
+    body: SearchCodeRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+    user: AuthUser | None = Depends(get_optional_user),
+):
+    """Grep-like code search across indexed files."""
+    return await call_agent(
+        client, "retrieval_search_code", body.model_dump(exclude_none=True)
+    )

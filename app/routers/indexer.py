@@ -57,14 +57,20 @@ async def clone_and_index(
 
     # Check for engine-level errors (e.g. private repo, invalid URL)
     if result.get("error"):
+        error_type = result.get("error_type", "")
         error_msg = result["error"]
-        # Detect private/inaccessible repos
-        if "not found" in error_msg.lower() or "authentication" in error_msg.lower() or "could not read" in error_msg.lower():
+
+        if error_type == "repo_not_accessible":
             raise HTTPException(
                 status_code=403,
                 detail="This repository is private or does not exist. Only public repositories are supported.",
             )
-        raise HTTPException(status_code=400, detail=error_msg)
+        elif error_type == "invalid_url":
+            raise HTTPException(status_code=422, detail=error_msg)
+        elif error_type == "timeout":
+            raise HTTPException(status_code=504, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
 
     # Derive slug from owner_repo
     owner_repo = result.get("owner_repo", "")
