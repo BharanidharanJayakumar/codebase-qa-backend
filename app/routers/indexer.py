@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 import httpx
 
 from app.dependencies import get_http_client
@@ -55,10 +55,25 @@ async def clone_and_index(
         logger.info("Clone+index from user %s for %s", user.id, body.github_url)
     result = await call_agent(client, "indexer_clone_and_index", body.model_dump())
 
+    # Check for engine-level errors (e.g. private repo, invalid URL)
+    if result.get("error"):
+        error_msg = result["error"]
+        # Detect private/inaccessible repos
+        if "not found" in error_msg.lower() or "authentication" in error_msg.lower() or "could not read" in error_msg.lower():
+            raise HTTPException(
+                status_code=403,
+                detail="This repository is private or does not exist. Only public repositories are supported.",
+            )
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    # Derive slug from owner_repo
+    owner_repo = result.get("owner_repo", "")
+    slug = owner_repo.replace("/", "-") if owner_repo else ""
+
     # Save project to Supabase for authenticated users
-    if user and result.get("status") == "ok":
-        project_id = result.get("project_id", "")
-        slug = result.get("slug", "")
+    if user and slug:
+        import uuid
+        project_id = result.get("project_id") or str(uuid.uuid4())
         project_root = result.get("project_root", "")
         db.save_user_project(
             user_id=user.id,
@@ -66,9 +81,11 @@ async def clone_and_index(
             slug=slug,
             project_root=project_root,
             github_url=body.github_url,
-            total_files=result.get("total_files", 0),
+            total_files=result.get("files_indexed", 0),
         )
 
+    # Ensure slug is always in the response
+    result["slug"] = slug
     return result
 
 

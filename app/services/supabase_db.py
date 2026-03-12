@@ -93,6 +93,7 @@ def ensure_session(user_id: str, project_id: str, session_id: str) -> dict | Non
             "id": session_id,
             "user_id": user_id,
             "project_id": project_id,
+            "title": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_message_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -100,6 +101,24 @@ def ensure_session(user_id: str, project_id: str, session_id: str) -> dict | Non
         return result.data[0] if result.data else None
     except Exception as e:
         logger.error("Failed to ensure session: %s", e)
+        return None
+
+
+def get_project_by_slug(user_id: str, slug: str) -> dict | None:
+    """Look up a project by slug for a user."""
+    try:
+        sb = get_supabase()
+        result = (
+            sb.table("projects")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("slug", slug)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error("Failed to get project by slug: %s", e)
         return None
 
 
@@ -119,6 +138,28 @@ def list_project_sessions(user_id: str, project_id: str) -> list[dict]:
     except Exception as e:
         logger.error("Failed to list sessions: %s", e)
         return []
+
+
+def update_session_title(session_id: str, title: str) -> None:
+    """Set the title for a session (auto-generated from first question)."""
+    try:
+        sb = get_supabase()
+        sb.table("sessions").update({"title": title}).eq("id", session_id).execute()
+    except Exception as e:
+        logger.error("Failed to update session title: %s", e)
+
+
+def delete_session(user_id: str, session_id: str) -> bool:
+    """Delete a session and its turns."""
+    try:
+        sb = get_supabase()
+        # Delete turns first, then session
+        sb.table("turns").delete().eq("session_id", session_id).execute()
+        sb.table("sessions").delete().eq("id", session_id).eq("user_id", user_id).execute()
+        return True
+    except Exception as e:
+        logger.error("Failed to delete session: %s", e)
+        return False
 
 
 def save_chat_turn(

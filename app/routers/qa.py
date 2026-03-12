@@ -51,6 +51,11 @@ async def answer_question(
                 history = db.load_chat_history(body.session_id)
                 turn_index = len(history)
 
+                # Auto-title session from first question
+                if turn_index == 0:
+                    title = body.question[:80].strip()
+                    db.update_session_title(body.session_id, title)
+
                 db.save_chat_turn(
                     session_id=body.session_id,
                     turn_index=turn_index,
@@ -161,14 +166,34 @@ async def get_session_history(
 
 @router.get("/user/sessions")
 async def list_user_sessions(
-    project_id: str,
+    project_id: str | None = None,
+    slug: str | None = None,
     user: AuthUser | None = Depends(get_optional_user),
 ):
-    """List all chat sessions for a user's project."""
+    """List all chat sessions for a user's project (by project_id or slug)."""
     if not user:
         return {"sessions": []}
-    sessions = db.list_project_sessions(user.id, project_id)
+    pid = project_id
+    if not pid and slug:
+        project = db.get_project_by_slug(user.id, slug)
+        if project:
+            pid = project["id"]
+    if not pid:
+        return {"sessions": []}
+    sessions = db.list_project_sessions(user.id, pid)
     return {"sessions": sessions}
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    user: AuthUser | None = Depends(get_optional_user),
+):
+    """Delete a chat session and its turns."""
+    if not user:
+        return {"deleted": False, "error": "Authentication required"}
+    deleted = db.delete_session(user.id, session_id)
+    return {"deleted": deleted, "session_id": session_id}
 
 
 @router.get("/user/me")
