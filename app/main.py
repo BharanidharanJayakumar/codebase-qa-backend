@@ -15,7 +15,7 @@ from app.routers import health, indexer, qa
 async def lifespan(app: FastAPI):
     app.state.http_client = httpx.AsyncClient(
         base_url=settings.agent_base_url,
-        timeout=httpx.Timeout(120.0),
+        timeout=httpx.Timeout(600.0),  # 10min — indexing with LLM intelligence takes 2-4min
     )
     yield
     await app.state.http_client.aclose()
