@@ -88,12 +88,11 @@ def ensure_session(user_id: str, project_id: str, session_id: str) -> dict | Non
                 {"last_message_at": datetime.now(timezone.utc).isoformat()}
             ).eq("id", session_id).execute()
             return existing.data[0]
-        # Create new session
+        # Create new session (title column may not exist yet)
         data = {
             "id": session_id,
             "user_id": user_id,
             "project_id": project_id,
-            "title": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_message_at": datetime.now(timezone.utc).isoformat(),
         }

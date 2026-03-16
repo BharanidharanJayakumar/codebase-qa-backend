@@ -122,6 +122,15 @@ async def unwatch_project(
     return await call_agent(client, "indexer_unwatch_project", body.model_dump())
 
 
+@router.get("/enrichment-status")
+async def get_enrichment_status(
+    project_path: str = "",
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """Check LLM enrichment status for a project (polling endpoint)."""
+    return await call_agent(client, "indexer_get_enrichment_status", {"project_path": project_path})
+
+
 @router.delete("/project")
 async def delete_project(
     body: DeleteProjectRequest,
